@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
 from io import BytesIO
 import plotly.express as px
 import matplotlib.pyplot as plt
@@ -11,10 +12,11 @@ import matplotlib.pyplot as plt
 # CONFIGURACIÓN DE LA APP
 # --------------------------------------------------
 st.set_page_config(page_title="K-Means Interactivo", layout="wide")
-st.title("🎯 K-Means Interactivo con Parámetros Personalizables")
+st.title("🎯 K-Means Interactivo con PCA y Estandarización")
 st.write("""
-Esta aplicación permite realizar **Clustering con K-Means** y visualizar los resultados usando **PCA (2D o 3D)**.  
-Puedes ajustar parámetros del modelo y comparar la distribución de los datos **antes y después** del agrupamiento.
+Esta aplicación permite aplicar **K-Means** sobre tus datos, estandarizarlos y visualizar los clusters 
+en 2D o 3D con **PCA (Análisis de Componentes Principales)**.  
+Podrás observar cómo los grupos se forman de manera más clara, similar al ejemplo clásico de “After K-Means”.
 """)
 
 # --------------------------------------------------
@@ -49,28 +51,22 @@ if uploaded_file is not None:
         k = st.sidebar.slider("Número de clusters (k):", 1, 10, 3)
         n_components = st.sidebar.radio("Visualización PCA:", [2, 3], index=0)
 
-        # --- NUEVOS PARÁMETROS SEGÚN INSTRUCCIONES ---
-        init_method = st.sidebar.selectbox(
-            "Método de inicialización (init):",
-            ['k-means++', 'random']
-        )
-        max_iter = st.sidebar.number_input(
-            "Número máximo de iteraciones (max_iter):",
-            min_value=100, max_value=1000, value=300, step=50
-        )
-        n_init = st.sidebar.number_input(
-            "Número de inicializaciones (n_init):",
-            min_value=1, max_value=50, value=10, step=1
-        )
-        random_state = st.sidebar.number_input(
-            "Semilla aleatoria (random_state):",
-            min_value=0, max_value=999, value=42, step=1
-        )
+        # Parámetros adicionales
+        init_method = st.sidebar.selectbox("Método de inicialización (init):", ['k-means++', 'random'])
+        max_iter = st.sidebar.number_input("Iteraciones máximas (max_iter):", 100, 1000, 300, step=50)
+        n_init = st.sidebar.number_input("Número de inicializaciones (n_init):", 1, 50, 10, step=1)
+        random_state = st.sidebar.number_input("Semilla aleatoria (random_state):", 0, 999, 42, step=1)
 
         # --------------------------------------------------
-        # APLICAR K-MEANS
+        # ESCALADO DE LOS DATOS
         # --------------------------------------------------
         X = data[selected_cols]
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
+
+        # --------------------------------------------------
+        # MODELO K-MEANS
+        # --------------------------------------------------
         kmeans = KMeans(
             n_clusters=k,
             init=init_method,
@@ -78,51 +74,72 @@ if uploaded_file is not None:
             n_init=n_init,
             random_state=random_state
         )
-        kmeans.fit(X)
+        kmeans.fit(X_scaled)
         data['Cluster'] = kmeans.labels_
 
         # --------------------------------------------------
-        # PCA PARA VISUALIZAR EN 2D/3D
+        # PCA PARA VISUALIZAR EN 2D O 3D
         # --------------------------------------------------
         pca = PCA(n_components=n_components)
-        X_pca = pca.fit_transform(X)
+        X_pca = pca.fit_transform(X_scaled)
         pca_cols = [f'PCA{i+1}' for i in range(n_components)]
         pca_df = pd.DataFrame(X_pca, columns=pca_cols)
         pca_df['Cluster'] = data['Cluster']
 
         # --------------------------------------------------
-        # VISUALIZACIÓN ANTES Y DESPUÉS
+        # VISUALIZACIÓN ANTES DE K-MEANS
         # --------------------------------------------------
         st.subheader("📊 Distribución original (antes de K-Means)")
         if n_components == 2:
             fig_before = px.scatter(
-                pca_df, x='PCA1', y='PCA2',
-                title="Datos originales (sin agrupar)",
+                x=X_pca[:, 0],
+                y=X_pca[:, 1],
+                title="Datos proyectados con PCA (sin agrupar)",
                 color_discrete_sequence=["gray"]
             )
         else:
             fig_before = px.scatter_3d(
-                pca_df, x='PCA1', y='PCA2', z='PCA3',
-                title="Datos originales (sin agrupar)",
+                x=X_pca[:, 0],
+                y=X_pca[:, 1],
+                z=X_pca[:, 2],
+                title="Datos proyectados con PCA (sin agrupar)",
                 color_discrete_sequence=["gray"]
             )
         st.plotly_chart(fig_before, use_container_width=True)
 
+        # --------------------------------------------------
+        # VISUALIZACIÓN DESPUÉS DE K-MEANS
+        # --------------------------------------------------
         st.subheader(f"🎨 Clusters obtenidos con K-Means (k = {k})")
+
         if n_components == 2:
             fig_after = px.scatter(
                 pca_df, x='PCA1', y='PCA2',
                 color=pca_df['Cluster'].astype(str),
-                title="Clusters en 2D con PCA",
+                title="Clusters en 2D con PCA (After K-Means)",
                 color_discrete_sequence=px.colors.qualitative.Vivid
             )
+
+            # Agregar centroides
+            centroids_pca = pca.transform(kmeans.cluster_centers_)
+            fig_after.add_scatter(
+                x=centroids_pca[:, 0],
+                y=centroids_pca[:, 1],
+                mode='markers+text',
+                text=[f'C{i}' for i in range(k)],
+                textposition='top center',
+                marker=dict(symbol='x', size=12, color='black'),
+                name='Centroides'
+            )
+
         else:
             fig_after = px.scatter_3d(
                 pca_df, x='PCA1', y='PCA2', z='PCA3',
                 color=pca_df['Cluster'].astype(str),
-                title="Clusters en 3D con PCA",
+                title="Clusters en 3D con PCA (After K-Means)",
                 color_discrete_sequence=px.colors.qualitative.Vivid
             )
+
         st.plotly_chart(fig_after, use_container_width=True)
 
         # --------------------------------------------------
@@ -141,7 +158,7 @@ if uploaded_file is not None:
             K = range(1, 11)
             for i in K:
                 km = KMeans(n_clusters=i, random_state=random_state)
-                km.fit(X)
+                km.fit(X_scaled)
                 inertias.append(km.inertia_)
 
             fig2, ax2 = plt.subplots(figsize=(8, 6))
