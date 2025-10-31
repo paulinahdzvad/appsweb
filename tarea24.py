@@ -12,12 +12,7 @@ import matplotlib.pyplot as plt
 # CONFIGURACIÓN DE LA APP
 # --------------------------------------------------
 st.set_page_config(page_title="K-Means Interactivo", layout="wide")
-st.title("🎯 K-Means Interactivo con PCA y Estandarización")
-st.write("""
-Esta aplicación permite aplicar **K-Means** sobre tus datos, estandarizarlos y visualizar los clusters 
-en 2D o 3D con **PCA (Análisis de Componentes Principales)**.  
-Podrás observar cómo los grupos se forman de manera más clara, similar al ejemplo clásico de “After K-Means”.
-""")
+st.title("🎯 Tarea 2.4 Algoritmos de Busqueda")
 
 # --------------------------------------------------
 # SUBIR ARCHIVO CSV
@@ -193,3 +188,4 @@ else:
     | 72000 | 680 | 35 |
     | 28000 | 210 | 22 |
     """)
+
